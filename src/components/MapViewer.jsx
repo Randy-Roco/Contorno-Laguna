@@ -8,10 +8,12 @@ import OSM from "ol/source/OSM";
 import VectorLayer from "ol/layer/Vector";
 import VectorSource from "ol/source/Vector";
 import GeoJSON from "ol/format/GeoJSON";
+import Feature from "ol/Feature";
 import { Draw, Modify, Snap } from "ol/interaction";
 import { Fill, Stroke, Style, Circle as CircleStyle } from "ol/style";
 import { transform } from "ol/proj";
-import { getArea, getLength } from "ol/sphere";
+import { getArea as getGeodesicArea, getLength as getGeodesicLength } from "ol/sphere";
+import LineString from "ol/geom/LineString";
 
 const ESCONDIDA_UTM19S = [486209.679, 7302665.235];
 const ESCONDIDA_CENTER = transform(
@@ -19,6 +21,30 @@ const ESCONDIDA_CENTER = transform(
   "EPSG:32719",
   "EPSG:3857"
 );
+
+function normalizarGeoJSON(data) {
+  if (!data) return null;
+
+  if (Array.isArray(data)) {
+    if (data.length === 1) return data[0];
+    return {
+      type: "FeatureCollection",
+      features: data.flatMap((item) =>
+        item?.type === "FeatureCollection" ? item.features || [] : []
+      )
+    };
+  }
+
+  return data;
+}
+
+function geometryEsValida(geometry) {
+  return (
+    geometry &&
+    typeof geometry.getType === "function" &&
+    typeof geometry.clone === "function"
+  );
+}
 
 export default function MapViewer({
   contourData,
@@ -36,7 +62,18 @@ export default function MapViewer({
   const snapRef = useRef(null);
 
   function actualizarMetricas(feature) {
+    if (!(feature instanceof Feature)) {
+      console.warn("Feature no válida en actualizarMetricas:", feature);
+      return;
+    }
+
     const geometry = feature.getGeometry();
+
+    if (!geometryEsValida(geometry)) {
+      console.warn("Geometría inválida:", geometry);
+      return;
+    }
+
     const format = new GeoJSON();
 
     const geojsonFeature = format.writeFeatureObject(feature, {
@@ -44,17 +81,27 @@ export default function MapViewer({
       dataProjection: "EPSG:32719"
     });
 
-    const area = getArea(geometry);
+    const tipo = geometry.getType();
 
+    let area = 0;
     let perimetro = 0;
-    const rings = geometry.getCoordinates();
-    if (rings?.length > 0) {
-      const ringCoords = rings[0];
-      const lineStringLike = {
-        getType: () => "LineString",
-        getCoordinates: () => ringCoords
-      };
-      perimetro = getLength(lineStringLike);
+
+    try {
+      if (tipo === "Polygon") {
+        area = getGeodesicArea(geometry);
+
+        const ringCoords = geometry.getCoordinates()?.[0] || [];
+        if (ringCoords.length > 1) {
+          const line = new LineString(ringCoords);
+          perimetro = getGeodesicLength(line);
+        }
+      } else if (tipo === "LineString") {
+        perimetro = getGeodesicLength(geometry);
+      } else {
+        console.warn("Tipo de geometría no soportado para métricas:", tipo);
+      }
+    } catch (error) {
+      console.error("Error calculando métricas:", error);
     }
 
     setContourGeoJSON(geojsonFeature);
@@ -77,8 +124,13 @@ export default function MapViewer({
     const contourLayer = new VectorLayer({
       source: contourSource,
       style: new Style({
-        fill: new Fill({ color: "rgba(0, 136, 255, 0.18)" }),
-        stroke: new Stroke({ color: "#00c8ff", width: 2 }),
+        fill: new Fill({
+          color: "rgba(0, 136, 255, 0.18)"
+        }),
+        stroke: new Stroke({
+          color: "#00c8ff",
+          width: 2
+        }),
         image: new CircleStyle({
           radius: 5,
           fill: new Fill({ color: "#00c8ff" }),
@@ -106,7 +158,9 @@ export default function MapViewer({
     const map = new Map({
       target: mapRef.current,
       layers: [
-        new TileLayer({ source: new OSM() }),
+        new TileLayer({
+          source: new OSM()
+        }),
         contourLayer,
         anchorLayer
       ],
@@ -137,6 +191,7 @@ export default function MapViewer({
           contourSource.clear();
           contourSource.addFeature(ultima);
         }
+
         actualizarMetricas(event.feature);
       }, 0);
     });
@@ -179,22 +234,39 @@ export default function MapViewer({
       return;
     }
 
-    const format = new GeoJSON();
-    const features = format.readFeatures(contourData, {
-      dataProjection: "EPSG:32719",
-      featureProjection: "EPSG:3857"
-    });
+    try {
+      const format = new GeoJSON();
+      const dataNormalizada = normalizarGeoJSON(contourData);
 
-    contourSource.addFeatures(features);
-
-    if (features.length > 0) {
-      map.getView().fit(contourSource.getExtent(), {
-        padding: [40, 40, 40, 40],
-        maxZoom: 18,
-        duration: 500
+      const features = format.readFeatures(dataNormalizada, {
+        dataProjection: "EPSG:32719",
+        featureProjection: "EPSG:3857"
       });
 
-      actualizarMetricas(features[0]);
+      contourSource.addFeatures(features);
+
+      if (features.length > 0) {
+        map.getView().fit(contourSource.getExtent(), {
+          padding: [40, 40, 40, 40],
+          maxZoom: 18,
+          duration: 500
+        });
+
+        actualizarMetricas(features[0]);
+      } else {
+        map.getView().animate({
+          center: ESCONDIDA_CENTER,
+          zoom: 13,
+          duration: 500
+        });
+      }
+    } catch (error) {
+      console.error("Error cargando contourData:", error);
+      map.getView().animate({
+        center: ESCONDIDA_CENTER,
+        zoom: 13,
+        duration: 500
+      });
     }
   }, [contourData, setAttributes, setContourGeoJSON]);
 
@@ -206,13 +278,19 @@ export default function MapViewer({
 
     if (!anchorData) return;
 
-    const format = new GeoJSON();
-    const features = format.readFeatures(anchorData, {
-      dataProjection: "EPSG:32719",
-      featureProjection: "EPSG:3857"
-    });
+    try {
+      const format = new GeoJSON();
+      const dataNormalizada = normalizarGeoJSON(anchorData);
 
-    anchorSource.addFeatures(features);
+      const features = format.readFeatures(dataNormalizada, {
+        dataProjection: "EPSG:32719",
+        featureProjection: "EPSG:3857"
+      });
+
+      anchorSource.addFeatures(features);
+    } catch (error) {
+      console.error("Error cargando anchorData:", error);
+    }
   }, [anchorData]);
 
   useEffect(() => {
