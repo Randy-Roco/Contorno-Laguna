@@ -1,64 +1,94 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import MapViewer from "../components/MapViewer";
 import AttributePanel from "../components/AttributePanel";
 import ExportPanel from "../components/ExportPanel";
 import DateSelector from "../components/DateSelector";
-
-const FECHAS_INICIALES = [
-  {
-    id: "laguna_2025_11_03",
-    fecha: "2025-11-03",
-    preview: null
-  },
-  {
-    id: "laguna_2025_10_25",
-    fecha: "2025-10-25",
-    preview: null
-  },
-  {
-    id: "laguna_2025_10_06",
-    fecha: "2025-10-06",
-    preview: null
-  }
-];
+import { cargarCatalogoFechas, cargarGeoJSON } from "../lib/catalog";
 
 export default function Home() {
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(FECHAS_INICIALES[0].id);
+  const [fechas, setFechas] = useState([]);
+  const [fechaSeleccionada, setFechaSeleccionada] = useState("");
   const [contourGeoJSON, setContourGeoJSON] = useState(null);
+  const [anchorGeoJSON, setAnchorGeoJSON] = useState(null);
+  const [modoEdicion, setModoEdicion] = useState(true);
+
   const [attributes, setAttributes] = useState({
     cota: "",
     area: 0,
     perimetro: 0,
-    fecha: "2025-11-03",
+    fecha: "",
     descriptor: "Contorno"
   });
 
-  const fechaActiva = useMemo(
-    () => FECHAS_INICIALES.find((f) => f.id === fechaSeleccionada) ?? FECHAS_INICIALES[0],
-    [fechaSeleccionada]
-  );
+  useEffect(() => {
+    async function init() {
+      try {
+        const catalogo = await cargarCatalogoFechas();
+        setFechas(catalogo);
+
+        const fechaDefault =
+          catalogo.find((x) => x.visiblePorDefecto)?.id || catalogo[0]?.id || "";
+
+        setFechaSeleccionada(fechaDefault);
+
+        const anchor = await cargarGeoJSON("/data/anclas/Mod_Ini_Cont.geojson");
+        setAnchorGeoJSON(anchor);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    init();
+  }, []);
+
+  const fechaActiva = useMemo(() => {
+    return fechas.find((x) => x.id === fechaSeleccionada) || null;
+  }, [fechas, fechaSeleccionada]);
+
+  useEffect(() => {
+    async function cargarContornoActivo() {
+      if (!fechaActiva) return;
+
+      setAttributes((prev) => ({
+        ...prev,
+        fecha: fechaActiva.fecha
+      }));
+
+      try {
+        const poly = await cargarGeoJSON(fechaActiva.poligono);
+        setContourGeoJSON(poly);
+      } catch (error) {
+        console.warn("No se pudo cargar polígono para esta fecha:", error.message);
+        setContourGeoJSON(null);
+      }
+    }
+
+    cargarContornoActivo();
+  }, [fechaActiva]);
 
   return (
     <div className="layout">
       <aside className="sidebar">
         <h1>Contorno Laguna</h1>
         <p className="muted">
-          Plataforma base para visualización, edición y exportación de contornos.
+          Visualización, edición y exportación de contornos multifecha.
         </p>
 
+        <section className="panel">
+          <h2>Modo</h2>
+
+          <button
+            className="button"
+            onClick={() => setModoEdicion((prev) => !prev)}
+          >
+            {modoEdicion ? "Modo edición activo" : "Modo cliente activo"}
+          </button>
+        </section>
+
         <DateSelector
-          fechas={FECHAS_INICIALES}
+          fechas={fechas}
           fechaSeleccionada={fechaSeleccionada}
-          onChange={(value) => {
-            setFechaSeleccionada(value);
-            const f = FECHAS_INICIALES.find((x) => x.id === value);
-            if (f) {
-              setAttributes((prev) => ({
-                ...prev,
-                fecha: f.fecha
-              }));
-            }
-          }}
+          onChange={setFechaSeleccionada}
         />
 
         <AttributePanel
@@ -74,9 +104,11 @@ export default function Home() {
 
       <main className="map-section">
         <MapViewer
-          fechaActiva={fechaActiva}
+          contourData={contourGeoJSON}
+          anchorData={anchorGeoJSON}
           setContourGeoJSON={setContourGeoJSON}
           setAttributes={setAttributes}
+          modoEdicion={modoEdicion}
         />
       </main>
     </div>

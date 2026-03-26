@@ -15,7 +15,8 @@
     "ol": "^10.6.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "shp-write": "^0.3.2"
+    "shp-write": "^0.3.2",
+    "shpjs": "^6.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.0",

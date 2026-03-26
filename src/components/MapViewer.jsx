@@ -5,25 +5,70 @@ import TileLayer from "ol/layer/Tile";
 import OSM from "ol/source/OSM";
 import VectorLayer from "ol/layer/Vector";
 import VectorSource from "ol/source/Vector";
-import { Draw, Modify, Snap } from "ol/interaction";
 import GeoJSON from "ol/format/GeoJSON";
+import { Draw, Modify, Snap } from "ol/interaction";
 import { Fill, Stroke, Style, Circle as CircleStyle } from "ol/style";
 import { fromLonLat } from "ol/proj";
 import { getArea, getLength } from "ol/sphere";
 
-export default function MapViewer({ fechaActiva, setContourGeoJSON, setAttributes }) {
+const ESCONDIDA_CENTER = fromLonLat([-69.070556, -24.269444]);
+
+export default function MapViewer({
+  contourData,
+  anchorData,
+  setContourGeoJSON,
+  setAttributes,
+  modoEdicion = true
+}) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
-  const sourceRef = useRef(null);
+  const contourSourceRef = useRef(null);
+  const anchorSourceRef = useRef(null);
+  const drawRef = useRef(null);
+  const modifyRef = useRef(null);
+  const snapRef = useRef(null);
+
+  function actualizarMetricas(feature) {
+    const geometry = feature.getGeometry();
+    const format = new GeoJSON();
+
+    const geojsonFeature = format.writeFeatureObject(feature, {
+      featureProjection: "EPSG:3857",
+      dataProjection: "EPSG:4326"
+    });
+
+    const area = getArea(geometry);
+
+    let perimetro = 0;
+    const rings = geometry.getCoordinates();
+    if (rings?.length > 0) {
+      const ringCoords = rings[0];
+      const lineStringLike = {
+        getType: () => "LineString",
+        getCoordinates: () => ringCoords
+      };
+      perimetro = getLength(lineStringLike);
+    }
+
+    setContourGeoJSON(geojsonFeature);
+    setAttributes((prev) => ({
+      ...prev,
+      area,
+      perimetro
+    }));
+  }
 
   useEffect(() => {
     if (mapInstanceRef.current) return;
 
-    const vectorSource = new VectorSource();
-    sourceRef.current = vectorSource;
+    const contourSource = new VectorSource();
+    const anchorSource = new VectorSource();
 
-    const vectorLayer = new VectorLayer({
-      source: vectorSource,
+    contourSourceRef.current = contourSource;
+    anchorSourceRef.current = anchorSource;
+
+    const contourLayer = new VectorLayer({
+      source: contourSource,
       style: new Style({
         fill: new Fill({
           color: "rgba(0, 136, 255, 0.18)"
@@ -40,90 +85,156 @@ export default function MapViewer({ fechaActiva, setContourGeoJSON, setAttribute
       })
     });
 
+    const anchorLayer = new VectorLayer({
+      source: anchorSource,
+      style: new Style({
+        stroke: new Stroke({
+          color: "#ffcc00",
+          width: 3,
+          lineDash: [8, 6]
+        }),
+        image: new CircleStyle({
+          radius: 6,
+          fill: new Fill({ color: "#ffcc00" }),
+          stroke: new Stroke({ color: "#111827", width: 2 })
+        })
+      })
+    });
+
     const map = new Map({
       target: mapRef.current,
       layers: [
         new TileLayer({
           source: new OSM()
         }),
-        vectorLayer
+        contourLayer,
+        anchorLayer
       ],
       view: new View({
-        center: fromLonLat([-70.4, -23.65]),
-        zoom: 12
+        center: ESCONDIDA_CENTER,
+        zoom: 11
       })
     });
 
     const draw = new Draw({
-      source: vectorSource,
+      source: contourSource,
       type: "Polygon"
     });
 
     const modify = new Modify({
-      source: vectorSource
+      source: contourSource
     });
 
     const snap = new Snap({
-      source: vectorSource
+      source: contourSource
     });
-
-    function updateGeometry(feature) {
-      const geometry = feature.getGeometry();
-      const format = new GeoJSON();
-      const geojsonFeature = format.writeFeatureObject(feature);
-
-      const area = getArea(geometry);
-      let perimetro = 0;
-
-      const rings = geometry.getCoordinates();
-      if (rings.length > 0) {
-        const ringCoords = rings[0];
-        const lineStringLike = {
-          getType: () => "LineString",
-          getCoordinates: () => ringCoords
-        };
-        perimetro = getLength(lineStringLike);
-      }
-
-      setContourGeoJSON(geojsonFeature);
-      setAttributes((prev) => ({
-        ...prev,
-        area,
-        perimetro
-      }));
-    }
 
     draw.on("drawend", (event) => {
       setTimeout(() => {
-        const features = vectorSource.getFeatures();
+        const features = contourSource.getFeatures();
         if (features.length > 1) {
-          const first = features[0];
-          vectorSource.clear();
-          vectorSource.addFeature(first);
+          const ultima = features[features.length - 1];
+          contourSource.clear();
+          contourSource.addFeature(ultima);
         }
-        updateGeometry(event.feature);
+        actualizarMetricas(event.feature);
       }, 0);
     });
 
     modify.on("modifyend", (event) => {
       const feature = event.features.item(0);
-      if (feature) updateGeometry(feature);
+      if (feature) actualizarMetricas(feature);
     });
 
-    map.addInteraction(draw);
-    map.addInteraction(modify);
-    map.addInteraction(snap);
+    drawRef.current = draw;
+    modifyRef.current = modify;
+    snapRef.current = snap;
+
+    if (modoEdicion) {
+      map.addInteraction(draw);
+      map.addInteraction(modify);
+      map.addInteraction(snap);
+    }
 
     mapInstanceRef.current = map;
 
     return () => {
       map.setTarget(undefined);
     };
-  }, [setAttributes, setContourGeoJSON]);
+  }, [modoEdicion, setAttributes, setContourGeoJSON]);
 
   useEffect(() => {
-    console.log("Fecha activa:", fechaActiva);
-  }, [fechaActiva]);
+    const map = mapInstanceRef.current;
+    const contourSource = contourSourceRef.current;
+    if (!map || !contourSource) return;
+
+    contourSource.clear();
+
+    if (!contourData) {
+      map.getView().animate({
+        center: ESCONDIDA_CENTER,
+        zoom: 11,
+        duration: 500
+      });
+      return;
+    }
+
+    const format = new GeoJSON();
+    const features = format.readFeatures(contourData, {
+      dataProjection: "EPSG:4326",
+      featureProjection: "EPSG:3857"
+    });
+
+    contourSource.addFeatures(features);
+
+    if (features.length > 0) {
+      map.getView().fit(contourSource.getExtent(), {
+        padding: [40, 40, 40, 40],
+        maxZoom: 18,
+        duration: 500
+      });
+
+      actualizarMetricas(features[0]);
+    } else {
+      map.getView().animate({
+        center: ESCONDIDA_CENTER,
+        zoom: 11,
+        duration: 500
+      });
+    }
+  }, [contourData, setAttributes, setContourGeoJSON]);
+
+  useEffect(() => {
+    const anchorSource = anchorSourceRef.current;
+    if (!anchorSource) return;
+
+    anchorSource.clear();
+
+    if (!anchorData) return;
+
+    const format = new GeoJSON();
+    const features = format.readFeatures(anchorData, {
+      dataProjection: "EPSG:4326",
+      featureProjection: "EPSG:3857"
+    });
+
+    anchorSource.addFeatures(features);
+  }, [anchorData]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !drawRef.current || !modifyRef.current || !snapRef.current) return;
+
+    map.removeInteraction(drawRef.current);
+    map.removeInteraction(modifyRef.current);
+    map.removeInteraction(snapRef.current);
+
+    if (modoEdicion) {
+      map.addInteraction(drawRef.current);
+      map.addInteraction(modifyRef.current);
+      map.addInteraction(snapRef.current);
+    }
+  }, [modoEdicion]);
 
   return <div ref={mapRef} className="map" />;
 }

@@ -1,9 +1,28 @@
 import { saveAs } from "file-saver";
 
 export default function ExportPanel({ contourGeoJSON, attributes }) {
+  function obtenerGeometria() {
+    if (!contourGeoJSON) return null;
+
+    if (contourGeoJSON.type === "Feature") {
+      return contourGeoJSON.geometry;
+    }
+
+    if (
+      contourGeoJSON.type === "FeatureCollection" &&
+      contourGeoJSON.features?.length > 0
+    ) {
+      return contourGeoJSON.features[0].geometry;
+    }
+
+    return null;
+  }
+
   function exportGeoJSON() {
-    if (!contourGeoJSON) {
-      alert("Primero debes dibujar un contorno.");
+    const geometry = obtenerGeometria();
+
+    if (!geometry) {
+      alert("Primero debes cargar o dibujar un contorno.");
       return;
     }
 
@@ -12,7 +31,7 @@ export default function ExportPanel({ contourGeoJSON, attributes }) {
       features: [
         {
           type: "Feature",
-          geometry: contourGeoJSON.geometry,
+          geometry,
           properties: {
             Cota: Number(attributes.cota || 0),
             Area: Number(attributes.area || 0),
@@ -28,7 +47,10 @@ export default function ExportPanel({ contourGeoJSON, attributes }) {
       type: "application/geo+json"
     });
 
-    saveAs(blob, `Cont_Lag_Poly_${attributes.fecha.replaceAll("-", "_")}.geojson`);
+    saveAs(
+      blob,
+      `Cont_Lag_Poly_${attributes.fecha.replaceAll("-", "_")}.geojson`
+    );
   }
 
   return (
@@ -41,14 +63,14 @@ export default function ExportPanel({ contourGeoJSON, attributes }) {
 
       <button
         className="button button-secondary"
-        onClick={() => alert("SHP vendrá en la siguiente capa.")}
+        onClick={() => alert("SHP lo conectaremos en la siguiente capa.")}
       >
         Exportar SHP
       </button>
 
       <button
         className="button button-secondary"
-        onClick={() => alert("KMZ vendrá en la siguiente capa.")}
+        onClick={() => alert("KMZ lo conectaremos en la siguiente capa.")}
       >
         Exportar KMZ
       </button>

@@ -10,8 +10,8 @@
   {
     "id": "laguna_2025_10_25",
     "fecha": "2025-10-25",
-    "linea": "/data/contornos/2025-10-25/Cont_Lag_Line_2025_10_25.geojson",
-    "poligono": "/data/contornos/2025-10-25/Cont_Lag_Poly_2025_10_25.geojson",
+    "linea": null,
+    "poligono": null,
     "preview": null,
     "visiblePorDefecto": false
   },
