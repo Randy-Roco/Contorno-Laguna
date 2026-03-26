@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@turf/turf": "^7.3.4",
+    "file-saver": "^2.0.5",
+    "jszip": "^3.10.1",
+    "ol": "^10.8.0",
+    "shp-write": "^0.3.2"
+  }
+}
