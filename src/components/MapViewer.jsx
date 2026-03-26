@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import "C:/Users/Randy/Contorno-Laguna/src/lib/projections";
+import "../lib/projections";
 
 import Map from "ol/Map";
 import View from "ol/View";
