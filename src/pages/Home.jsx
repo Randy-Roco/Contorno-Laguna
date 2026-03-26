@@ -27,14 +27,21 @@ export default function Home() {
         setFechas(catalogo);
 
         const fechaDefault =
-          catalogo.find((x) => x.visiblePorDefecto)?.id || catalogo[0]?.id || "";
+          catalogo.find((x) => x.visiblePorDefecto)?.id ||
+          catalogo[0]?.id ||
+          "";
 
         setFechaSeleccionada(fechaDefault);
 
-        const anchor = await cargarGeoJSON("/data/anclas/Mod_Ini_Cont.geojson");
-        setAnchorGeoJSON(anchor);
+        try {
+          const anchor = await cargarGeoJSON("/data/anclas/Mod_Ini_Cont.geojson");
+          setAnchorGeoJSON(anchor);
+        } catch (error) {
+          console.warn("No se pudo cargar el ancla:", error.message);
+          setAnchorGeoJSON(null);
+        }
       } catch (error) {
-        console.error(error);
+        console.error("Error al inicializar la app:", error);
       }
     }
 
@@ -76,7 +83,6 @@ export default function Home() {
 
         <section className="panel">
           <h2>Modo</h2>
-
           <button
             className="button"
             onClick={() => setModoEdicion((prev) => !prev)}
