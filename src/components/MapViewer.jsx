@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import "C:/Users/Randy/Contorno-Laguna/src/lib/projections";
+
 import Map from "ol/Map";
 import View from "ol/View";
 import TileLayer from "ol/layer/Tile";
@@ -8,10 +10,15 @@ import VectorSource from "ol/source/Vector";
 import GeoJSON from "ol/format/GeoJSON";
 import { Draw, Modify, Snap } from "ol/interaction";
 import { Fill, Stroke, Style, Circle as CircleStyle } from "ol/style";
-import { fromLonLat } from "ol/proj";
+import { transform } from "ol/proj";
 import { getArea, getLength } from "ol/sphere";
 
-const ESCONDIDA_CENTER = fromLonLat([-69.070556, -24.269444]);
+const ESCONDIDA_UTM19S = [486209.679, 7302665.235];
+const ESCONDIDA_CENTER = transform(
+  ESCONDIDA_UTM19S,
+  "EPSG:32719",
+  "EPSG:3857"
+);
 
 export default function MapViewer({
   contourData,
@@ -34,7 +41,7 @@ export default function MapViewer({
 
     const geojsonFeature = format.writeFeatureObject(feature, {
       featureProjection: "EPSG:3857",
-      dataProjection: "EPSG:4326"
+      dataProjection: "EPSG:32719"
     });
 
     const area = getArea(geometry);
@@ -112,7 +119,7 @@ export default function MapViewer({
       ],
       view: new View({
         center: ESCONDIDA_CENTER,
-        zoom: 11
+        zoom: 13
       })
     });
 
@@ -173,15 +180,16 @@ export default function MapViewer({
     if (!contourData) {
       map.getView().animate({
         center: ESCONDIDA_CENTER,
-        zoom: 11,
+        zoom: 13,
         duration: 500
       });
       return;
     }
 
     const format = new GeoJSON();
+
     const features = format.readFeatures(contourData, {
-      dataProjection: "EPSG:4326",
+      dataProjection: "EPSG:32719",
       featureProjection: "EPSG:3857"
     });
 
@@ -198,7 +206,7 @@ export default function MapViewer({
     } else {
       map.getView().animate({
         center: ESCONDIDA_CENTER,
-        zoom: 11,
+        zoom: 13,
         duration: 500
       });
     }
@@ -213,8 +221,9 @@ export default function MapViewer({
     if (!anchorData) return;
 
     const format = new GeoJSON();
+
     const features = format.readFeatures(anchorData, {
-      dataProjection: "EPSG:4326",
+      dataProjection: "EPSG:32719",
       featureProjection: "EPSG:3857"
     });
 
