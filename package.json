@@ -1,0 +1,24 @@
+{
+  "name": "contorno-laguna",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@turf/turf": "^7.2.0",
+    "file-saver": "^2.0.5",
+    "jszip": "^3.10.1",
+    "ol": "^10.6.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "shp-write": "^0.3.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "vite": "^7.0.0"
+  }
+}
