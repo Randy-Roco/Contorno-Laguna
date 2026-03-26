@@ -77,13 +77,8 @@ export default function MapViewer({
     const contourLayer = new VectorLayer({
       source: contourSource,
       style: new Style({
-        fill: new Fill({
-          color: "rgba(0, 136, 255, 0.18)"
-        }),
-        stroke: new Stroke({
-          color: "#00c8ff",
-          width: 2
-        }),
+        fill: new Fill({ color: "rgba(0, 136, 255, 0.18)" }),
+        stroke: new Stroke({ color: "#00c8ff", width: 2 }),
         image: new CircleStyle({
           radius: 5,
           fill: new Fill({ color: "#00c8ff" }),
@@ -111,9 +106,7 @@ export default function MapViewer({
     const map = new Map({
       target: mapRef.current,
       layers: [
-        new TileLayer({
-          source: new OSM()
-        }),
+        new TileLayer({ source: new OSM() }),
         contourLayer,
         anchorLayer
       ],
@@ -187,7 +180,6 @@ export default function MapViewer({
     }
 
     const format = new GeoJSON();
-
     const features = format.readFeatures(contourData, {
       dataProjection: "EPSG:32719",
       featureProjection: "EPSG:3857"
@@ -203,12 +195,6 @@ export default function MapViewer({
       });
 
       actualizarMetricas(features[0]);
-    } else {
-      map.getView().animate({
-        center: ESCONDIDA_CENTER,
-        zoom: 13,
-        duration: 500
-      });
     }
   }, [contourData, setAttributes, setContourGeoJSON]);
 
@@ -221,7 +207,6 @@ export default function MapViewer({
     if (!anchorData) return;
 
     const format = new GeoJSON();
-
     const features = format.readFeatures(anchorData, {
       dataProjection: "EPSG:32719",
       featureProjection: "EPSG:3857"

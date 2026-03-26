@@ -34,12 +34,7 @@ export default function AttributePanel({ attributes, setAttributes }) {
       />
 
       <label className="label">Fecha</label>
-      <input
-        className="input"
-        type="text"
-        value={attributes.fecha}
-        readOnly
-      />
+      <input className="input" type="text" value={attributes.fecha} readOnly />
 
       <label className="label">Descriptor</label>
       <input
